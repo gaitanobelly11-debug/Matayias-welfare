@@ -16,13 +16,15 @@ jobs:
           node-version: 22
 
       - name: Install Dependencies
-        run: |
-          npm install--no-audit--no-found
-          npm run build
+        run: npm install --legacy-peer-deps
 
-      - name: Capacitor Sync
+      - name: Build Web Assets
+        run: npm run build
+
+      - name: Setup Capacitor & Build Android
         run: |
-          npm install @capacitor/android
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "Matayias Welfare" "com.matayias.welfare" --web-dir dist || true
           npx cap add android || true
           npx cap sync android
 
@@ -43,3 +45,4 @@ jobs:
         with:
           name: app-debug.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
