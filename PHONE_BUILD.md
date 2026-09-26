@@ -15,4 +15,4 @@ This project includes a GitHub Actions workflow. The actual Android build happen
 9. Open the completed workflow run and download the **Matayias-Welfare-APK** artifact.
 10. Extract the downloaded artifact and install `app-debug.apk` on the Android phone.
 
-The APK is a debug/test APK. It is suitable for testing on the phone. A signed release APK/AAB can be prepared later when the app is ready for wider distribution or Google Play.
+The APK is a debug/test APK. This build contains the offline-first storage and automatic sync changes. It is suitable for testing on the phone. A signed release APK/AAB can be prepared later when the app is ready for wider distribution or Google Play.

@@ -94,3 +94,27 @@ This project still uses the prototype's custom `accounts` table and client-side 
 ## Phone-only Android build
 
 A GitHub Actions workflow is included at `.github/workflows/build-android.yml`. It builds the Capacitor Android project in GitHub's cloud and uploads the debug APK as an artifact. See `PHONE_BUILD.md` for phone-only instructions.
+
+
+## Offline mode
+
+This version is **offline-first**. After the app has been opened online at least once and the
+member/account data has been loaded, the app keeps its data in the phone's IndexedDB storage.
+New members, contributions, loans, repayments, events, announcements, minutes, interest rounds,
+settings and attendance can be entered while offline. Changes are placed in a local queue and
+are automatically sent to Supabase when internet returns. The web version also registers a
+service worker so the app shell can reopen without internet.
+
+Important: the very first use on a new phone must be online so the phone can download the app
+and cache the group's current data. Do not clear the browser/app storage if you need the offline
+copy of the data.
+
+## Interest sharing
+
+The updated app includes **Interest Sharing**. At the end of a round, an administrator enters the total interest earned and the round dates. The app uses each member's **Table Banking contributions during that period**, calculates each member's percentage of the total, and distributes the interest proportionally.
+
+Example: if one member contributed 50% of the eligible Table Banking contributions, that member receives 50% of the distributable interest.
+
+The administrator can optionally retain part of the interest in the chama. The final member percentages and amounts are stored as a snapshot, so later contribution entries do not change a closed round.
+
+Before deploying this version, run `interest-sharing-migration.sql` once in the Supabase SQL Editor.
