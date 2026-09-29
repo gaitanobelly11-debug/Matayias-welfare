@@ -326,7 +326,7 @@ export default function App() {
         />
       )}
       {tab === "members" && session.role === "admin" && (
-        <MembersTab members={members} accounts={accounts} crud={crud} />
+        <MembersTab members={members} accounts={accounts} contributions={contributions} crud={crud} />
       )}
       {tab === "events" && (
         <EventsTab events={events} isAdmin={session.role === "admin"} members={members} attendance={attendance} crud={crud} />
@@ -561,11 +561,12 @@ function AdminDashboard({ members, contributions, loans, loanRepayments, events,
 }
 
 /* ---------------- MEMBERS ---------------- */
-function MembersTab({ members, accounts, crud }) {
+function MembersTab({ members, accounts, contributions, crud }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(blank());
   const [accForMember, setAccForMember] = useState(null);
+  const [summaryForMember, setSummaryForMember] = useState(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoErr, setPhotoErr] = useState("");
   function blank() { return { id: null, name: "", national_id: "", contact: "", next_of_kin_name: "", next_of_kin_contact: "", photo_data_url: "" }; }
@@ -643,7 +644,10 @@ function MembersTab({ members, accounts, crud }) {
               </div>
             </div>
             </div>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex gap-2 flex-wrap">
+              <button onClick={() => setSummaryForMember(m)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium" style={{ background: "#E7F3F0", color: TEAL_DARK }}>
+                <Wallet size={13} /> Contribution summary
+              </button>
               <button onClick={() => setAccForMember(m)} className="text-xs px-3 py-1.5 rounded-full font-medium" style={{ background: "#F1ECDD", color: TEAL_DARK }}>
                 {acc ? "Edit login account" : "Create login account"}
               </button>
@@ -662,6 +666,14 @@ function MembersTab({ members, accounts, crud }) {
           <Field label="Member photo"><div className="flex items-center gap-3"><MemberAvatar member={form} size={64} /><label className="text-xs px-3 py-2 rounded-full font-medium cursor-pointer" style={{ background: "#F1ECDD", color: TEAL_DARK }}>{photoBusy ? "Preparing photo..." : "Choose photo"}<input type="file" accept="image/*" className="hidden" disabled={photoBusy} onChange={(e) => handlePhoto(e.target.files?.[0])} /></label></div>{form.photo_data_url && <button type="button" className="text-[11px] mt-2 underline" style={{ color: "#B3391F" }} onClick={() => setForm({ ...form, photo_data_url: "" })}>Remove photo</button>}{photoErr && <p className="text-xs mt-1" style={{ color: "#B3391F" }}>{photoErr}</p>}<p className="text-[10px] mt-1" style={{ color: "#8A8270" }}>The photo is resized for phone/offline storage.</p></Field>
           <ModalActions onCancel={() => setShowForm(false)} onSave={save} />
         </Modal>
+      )}
+
+      {summaryForMember && (
+        <MemberContributionSummaryModal
+          member={summaryForMember}
+          contributions={contributions}
+          onClose={() => setSummaryForMember(null)}
+        />
       )}
 
       {accForMember && (
@@ -685,6 +697,52 @@ function MembersTab({ members, accounts, crud }) {
 function MemberAvatar({ member, size = 44 }) {
   const initials = String(member?.name || "M").split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase();
   return member?.photo_data_url ? <img src={member.photo_data_url} alt="Member" className="rounded-full object-cover border" style={{ width: size, height: size, borderColor: "#D8CFBB" }} /> : <div className="rounded-full flex items-center justify-center font-semibold border" style={{ width: size, height: size, background: "#E7F3F0", color: TEAL_DARK, borderColor: "#CDE7E1", fontSize: Math.max(11, size * 0.28) }}>{initials}</div>;
+}
+
+function MemberContributionSummaryModal({ member, contributions, onClose }) {
+  const totals = useMemo(() => {
+    const result = { monthly: 0, merryGoRound: 0, benevolent: 0, tableBanking: 0 };
+    contributions
+      .filter((c) => c.member_id === member.id)
+      .forEach((c) => { result[c.type] = (result[c.type] || 0) + Number(c.amount || 0); });
+    return result;
+  }, [member.id, contributions]);
+
+  const grandTotal = totals.monthly + totals.merryGoRound + totals.benevolent + totals.tableBanking;
+  const rows = [
+    { label: "Shares", key: "monthly" },
+    { label: "Merry-Go-Round", key: "merryGoRound" },
+    { label: "Benevolent Fund", key: "benevolent" },
+    { label: "Table Banking", key: "tableBanking" },
+  ];
+
+  return (
+    <Modal onClose={onClose} title="Member contribution summary">
+      <div className="flex items-center gap-3 mb-4 p-3 rounded-xl" style={{ background: "#E7F3F0" }}>
+        <MemberAvatar member={member} size={52} />
+        <div>
+          <p className="text-sm font-semibold" style={{ color: TEAL_DARK }}>{member.name}</p>
+          <p className="text-[11px] mt-0.5" style={{ color: "#7A7364" }}>{member.national_id}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {rows.map((row) => (
+          <div key={row.key} className="rounded-xl p-3 border" style={{ background: "#fff", borderColor: "#EDE6D3" }}>
+            <p className="text-[10px] font-medium" style={{ color: "#8A8270" }}>{row.label}</p>
+            <p className="text-sm font-semibold mt-1" style={{ color: TEAL_DARK }}>{fmtKES(totals[row.key])}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 rounded-xl p-3 flex items-center justify-between" style={{ background: "#FFF4D9", border: "1px solid #F1DFAC" }}>
+        <span className="text-xs font-semibold" style={{ color: "#7A5D13" }}>Total contributions</span>
+        <span className="text-base font-bold" style={{ color: "#8A6817" }}>{fmtKES(grandTotal)}</span>
+      </div>
+
+      <p className="text-[10px] mt-3" style={{ color: "#8A8270" }}>This summary totals all contribution records currently recorded for this member.</p>
+    </Modal>
+  );
 }
 
 function AccountModal({ member, account, accounts, onClose, onSave }) {
