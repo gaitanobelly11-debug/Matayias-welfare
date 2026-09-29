@@ -335,7 +335,7 @@ export default function App() {
         <ContributionsTab session={session} members={members} contributions={contributions} settings={settings} crud={crud} />
       )}
       {tab === "interest" && (
-        <InterestSharingTab session={session} members={members} contributions={contributions} interestRounds={interestRounds} interestDistributions={interestDistributions} crud={crud} />
+        <InterestSharingTab session={session} members={members} contributions={contributions} loans={loans} loanRepayments={loanRepayments} interestRounds={interestRounds} interestDistributions={interestDistributions} crud={crud} />
       )}
       {tab === "loans" && (
         <LoansTab session={session} members={members} loans={loans} loanRepayments={loanRepayments} contributions={contributions} settings={settings} crud={crud} />
@@ -566,7 +566,37 @@ function MembersTab({ members, accounts, crud }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(blank());
   const [accForMember, setAccForMember] = useState(null);
-  function blank() { return { id: null, name: "", national_id: "", contact: "", next_of_kin_name: "", next_of_kin_contact: "" }; }
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoErr, setPhotoErr] = useState("");
+  function blank() { return { id: null, name: "", national_id: "", contact: "", next_of_kin_name: "", next_of_kin_contact: "", photo_data_url: "" }; }
+
+  const handlePhoto = (file) => {
+    if (!file) return;
+    setPhotoErr("");
+    if (!file.type.startsWith("image/")) { setPhotoErr("Please select an image file."); return; }
+    setPhotoBusy(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 500;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const data = canvas.toDataURL("image/jpeg", 0.78);
+        if (data.length > 450000) { setPhotoErr("That photo is still too large. Please choose a smaller photo."); }
+        else setForm((prev) => ({ ...prev, photo_data_url: data }));
+        setPhotoBusy(false);
+      };
+      img.onerror = () => { setPhotoErr("Could not read that photo."); setPhotoBusy(false); };
+      img.src = reader.result;
+    };
+    reader.onerror = () => { setPhotoErr("Could not read that photo."); setPhotoBusy(false); };
+    reader.readAsDataURL(file);
+  };
 
   const openNew = () => { setForm(blank()); setEditing(null); setShowForm(true); };
   const openEdit = (m) => { setForm(m); setEditing(m.id); setShowForm(true); };
@@ -602,12 +632,11 @@ function MembersTab({ members, accounts, crud }) {
           <SectionCard key={m.id}>
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-sm font-semibold" style={{ color: TEAL_DARK }}>{m.name}</p>
+                <div className="flex items-center gap-3"><MemberAvatar member={m} size={48} /><div><p className="text-sm font-semibold" style={{ color: TEAL_DARK }}>{m.name}</p>
                 <p className="text-xs flex items-center gap-1 mt-1" style={{ color: "#7A7364" }}><CreditCard size={12} /> {m.national_id}</p>
                 <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: "#7A7364" }}><Phone size={12} /> {m.contact}</p>
                 {m.next_of_kin_name && <p className="text-xs mt-1" style={{ color: "#7A7364" }}>Next of kin: {m.next_of_kin_name} ({m.next_of_kin_contact})</p>}
-                <p className="text-[11px] mt-2" style={{ color: acc ? TEAL : "#B3391F" }}>{acc ? `Account: ${acc.username}` : "No login account"}</p>
-              </div>
+                <p className="text-[11px] mt-2" style={{ color: acc ? TEAL : "#B3391F" }}>{acc ? `Account: ${acc.username}` : "No login account"}</p></div></div>
               <div className="flex gap-2">
                 <button onClick={() => openEdit(m)} className="p-1.5 rounded-full" style={{ background: "#F1ECDD" }}><Pencil size={13} color={TEAL_DARK} /></button>
                 <button onClick={() => crud.removeMember(m.id)} className="p-1.5 rounded-full" style={{ background: "#F6E4DE" }}><Trash2 size={13} color="#B3391F" /></button>
@@ -629,6 +658,7 @@ function MembersTab({ members, accounts, crud }) {
           <Field label="Contact"><input className="input" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} /></Field>
           <Field label="Next of kin name"><input className="input" value={form.next_of_kin_name} onChange={(e) => setForm({ ...form, next_of_kin_name: e.target.value })} /></Field>
           <Field label="Next of kin contact"><input className="input" value={form.next_of_kin_contact} onChange={(e) => setForm({ ...form, next_of_kin_contact: e.target.value })} /></Field>
+          <Field label="Member photo"><div className="flex items-center gap-3"><MemberAvatar member={form} size={64} /><label className="text-xs px-3 py-2 rounded-full font-medium cursor-pointer" style={{ background: "#F1ECDD", color: TEAL_DARK }}>{photoBusy ? "Preparing photo..." : "Choose photo"}<input type="file" accept="image/*" className="hidden" disabled={photoBusy} onChange={(e) => handlePhoto(e.target.files?.[0])} /></label></div>{form.photo_data_url && <button type="button" className="text-[11px] mt-2 underline" style={{ color: "#B3391F" }} onClick={() => setForm({ ...form, photo_data_url: "" })}>Remove photo</button>}{photoErr && <p className="text-xs mt-1" style={{ color: "#B3391F" }}>{photoErr}</p>}<p className="text-[10px] mt-1" style={{ color: "#8A8270" }}>The photo is resized for phone/offline storage.</p></Field>
           <ModalActions onCancel={() => setShowForm(false)} onSave={save} />
         </Modal>
       )}
@@ -649,6 +679,11 @@ function MembersTab({ members, accounts, crud }) {
       )}
     </div>
   );
+}
+
+function MemberAvatar({ member, size = 44 }) {
+  const initials = String(member?.name || "M").split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase();
+  return member?.photo_data_url ? <img src={member.photo_data_url} alt="Member" className="rounded-full object-cover border" style={{ width: size, height: size, borderColor: "#D8CFBB" }} /> : <div className="rounded-full flex items-center justify-center font-semibold border" style={{ width: size, height: size, background: "#E7F3F0", color: TEAL_DARK, borderColor: "#CDE7E1", fontSize: Math.max(11, size * 0.28) }}>{initials}</div>;
 }
 
 function AccountModal({ member, account, accounts, onClose, onSave }) {
@@ -1044,14 +1079,14 @@ function ContributionsTab({ session, members, contributions, settings, crud }) {
 
 
 /* ---------------- INTEREST SHARING ---------------- */
-function InterestSharingTab({ session, members, contributions, interestRounds, interestDistributions, crud }) {
+function InterestSharingTab({ session, members, contributions, loans, loanRepayments, interestRounds, interestDistributions, crud }) {
   const isAdmin = session.role === "admin";
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(() => {
     const end = todayISO();
     const start = new Date(end + "T00:00:00");
     start.setMonth(start.getMonth() - 12);
-    return { name: "Interest Round", start_date: start.toISOString().slice(0, 10), end_date: end, total_interest: "", retained_amount: "0" };
+    return { name: "Interest Round", start_date: start.toISOString().slice(0, 10), end_date: end, total_interest: "", retained_amount: "0", method: "contributions", contribution_weight: "70", borrowing_weight: "30" };
   });
   const [err, setErr] = useState("");
 
@@ -1062,136 +1097,124 @@ function InterestSharingTab({ session, members, contributions, interestRounds, i
   const preview = useMemo(() => {
     const start = form.start_date;
     const end = form.end_date;
+    const method = form.method || "contributions";
+    const cw = Math.max(0, Number(form.contribution_weight) || 0);
+    const bw = Math.max(0, Number(form.borrowing_weight) || 0);
+
     const rows = members.map((m) => {
-      const total = contributions
+      const contributionTotal = contributions
         .filter((c) => c.member_id === m.id && c.type === "tableBanking" && c.date >= start && c.date <= end)
         .reduce((s, c) => s + Number(c.amount || 0), 0);
-      return { member_id: m.id, contribution_total: Math.round(total * 100) / 100 };
-    }).filter((r) => r.contribution_total > 0);
+
+      // Borrowing score: principal actually borrowed during the round. If a loan
+      // started before the round, the portion outstanding during the round is
+      // counted proportionally by days, so long-running loans are not ignored.
+      const borrowingScore = loans.filter((l) => l.member_id === m.id && l.date_borrowed && l.date_borrowed <= end)
+        .reduce((sum, l) => {
+          const principal = Math.max(0, Number(l.principal || 0));
+          if (!principal) return sum;
+          const borrowed = new Date(l.date_borrowed + "T00:00:00");
+          const roundStart = new Date(start + "T00:00:00");
+          const roundEnd = new Date(end + "T00:00:00");
+          const closeDate = l.actual_return_date ? new Date(l.actual_return_date + "T00:00:00") : null;
+          const due = closeDate || (l.due_date ? new Date(l.due_date + "T00:00:00") : roundEnd);
+          const from = borrowed > roundStart ? borrowed : roundStart;
+          const to = due < roundEnd ? due : roundEnd;
+          const days = Math.max(0, Math.round((to - from) / 86400000) + 1);
+          const roundDays = Math.max(1, Math.round((roundEnd - roundStart) / 86400000) + 1);
+          return sum + principal * Math.min(1, days / roundDays);
+        }, 0);
+      return { member_id: m.id, contribution_total: Math.round(contributionTotal * 100) / 100, borrowing_total: Math.round(borrowingScore * 100) / 100 };
+    });
+
     const totalContrib = rows.reduce((s, r) => s + r.contribution_total, 0);
+    const totalBorrowing = rows.reduce((s, r) => s + r.borrowing_total, 0);
     const interest = Math.max(0, Number(form.total_interest) || 0);
     const retained = Math.min(interest, Math.max(0, Number(form.retained_amount) || 0));
     const distributable = interest - retained;
-    return {
-      rows: rows.map((r) => ({
-        ...r,
-        percentage: totalContrib ? (r.contribution_total / totalContrib) * 100 : 0,
-        interest_share: totalContrib ? Math.round((r.contribution_total / totalContrib) * distributable * 100) / 100 : 0,
-      })),
-      totalContrib, distributable, retained
-    };
-  }, [members, contributions, form.start_date, form.end_date, form.total_interest, form.retained_amount]);
+    const validWeights = method === "combined" && cw + bw > 0 ? { c: cw / (cw + bw), b: bw / (cw + bw) } : { c: method === "borrowing" ? 0 : 1, b: method === "borrowing" ? 1 : 0 };
+
+    const scored = rows.map((r) => {
+      const cp = totalContrib ? r.contribution_total / totalContrib : 0;
+      const bp = totalBorrowing ? r.borrowing_total / totalBorrowing : 0;
+      const combinedScore = cp * validWeights.c + bp * validWeights.b;
+      return { ...r, contribution_percentage: cp * 100, borrowing_percentage: bp * 100, percentage: combinedScore * 100, raw_share: combinedScore * distributable };
+    });
+    const rawTotal = scored.reduce((s, r) => s + r.raw_share, 0);
+    const rounded = scored.map((r) => ({ ...r, interest_share: Math.round(r.raw_share * 100) / 100 }));
+    const remainder = Math.round((distributable - rounded.reduce((s, r) => s + r.interest_share, 0)) * 100) / 100;
+    if (remainder && rounded.length) {
+      const idx = rounded.reduce((best, r, i, arr) => r.raw_share > arr[best].raw_share ? i : best, 0);
+      rounded[idx].interest_share = Math.round((rounded[idx].interest_share + remainder) * 100) / 100;
+    }
+    return { rows: rounded.filter((r) => r.percentage > 0), totalContrib, totalBorrowing, distributable, retained, rawTotal, method, contributionWeight: method === "combined" ? cw : method === "contributions" ? 100 : 0, borrowingWeight: method === "combined" ? bw : method === "borrowing" ? 100 : 0 };
+  }, [members, contributions, loans, form.start_date, form.end_date, form.total_interest, form.retained_amount, form.method, form.contribution_weight, form.borrowing_weight]);
 
   const save = async () => {
     setErr("");
     const interest = Number(form.total_interest);
     const retained = Number(form.retained_amount || 0);
+    const cw = Number(form.contribution_weight || 0);
+    const bw = Number(form.borrowing_weight || 0);
     if (!isAdmin) return;
     if (!form.name.trim()) { setErr("Enter a round name."); return; }
     if (!form.start_date || !form.end_date || form.end_date < form.start_date) { setErr("Choose a valid start and end date."); return; }
     if (!Number.isFinite(interest) || interest < 0) { setErr("Enter the total interest earned."); return; }
     if (!Number.isFinite(retained) || retained < 0 || retained > interest) { setErr("Retained amount cannot be greater than total interest."); return; }
-    if (preview.totalContrib <= 0) { setErr("No Table Banking contributions were found in this round."); return; }
+    if (form.method === "contributions" && preview.totalContrib <= 0) { setErr("No Table Banking contributions were found in this round."); return; }
+    if (form.method === "borrowing" && preview.totalBorrowing <= 0) { setErr("No qualifying borrowing was found in this round."); return; }
+    if (form.method === "combined" && (cw <= 0 || bw <= 0 || Math.abs((cw + bw) - 100) > 0.01)) { setErr("For Contributions + Borrowing, the two percentages must add up to 100%."); return; }
+    if (preview.rows.length === 0) { setErr("No members qualify for this interest round."); return; }
 
     try {
       const round = {
-        name: form.name.trim(),
-        start_date: form.start_date,
-        end_date: form.end_date,
-        total_interest: interest,
-        retained_amount: retained,
-        distributable_interest: preview.distributable,
-        total_contributions: preview.totalContrib,
-        status: "finalized",
-        finalized_at: new Date().toISOString(),
+        name: form.name.trim(), start_date: form.start_date, end_date: form.end_date,
+        total_interest: interest, retained_amount: retained, distributable_interest: preview.distributable,
+        total_contributions: preview.totalContrib, total_borrowing: preview.totalBorrowing,
+        sharing_method: form.method, contribution_weight: preview.contributionWeight, borrowing_weight: preview.borrowingWeight,
+        status: "finalized", finalized_at: new Date().toISOString(),
       };
       const shares = preview.rows.map((r) => ({
-        member_id: r.member_id,
-        contribution_total: r.contribution_total,
-        contribution_percentage: Math.round(r.percentage * 10000) / 10000,
+        member_id: r.member_id, contribution_total: r.contribution_total, contribution_percentage: Math.round(r.contribution_percentage * 10000) / 10000,
+        borrowing_total: r.borrowing_total, borrowing_percentage: Math.round(r.borrowing_percentage * 10000) / 10000,
         interest_share: r.interest_share,
       }));
       await crud.addInterestRound(round, shares);
       setShowForm(false);
-      setForm({ name: "Interest Round", start_date: form.start_date, end_date: form.end_date, total_interest: "", retained_amount: "0" });
-    } catch (e) {
-      setErr(e.message || "Could not save the interest round.");
-    }
+      setForm({ name: "Interest Round", start_date: form.start_date, end_date: form.end_date, total_interest: "", retained_amount: "0", method: "contributions", contribution_weight: "70", borrowing_weight: "30" });
+    } catch (e) { setErr(e.message || "Could not save the interest round."); }
   };
+
+  const methodLabel = (r) => r.sharing_method === "combined" ? `Contributions ${Number(r.contribution_weight || 0)}% + Borrowing ${Number(r.borrowing_weight || 0)}%` : r.sharing_method === "borrowing" ? "Borrowing only" : "Contributions only";
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <div><h2 className="text-sm font-semibold" style={{ color: TEAL_DARK }}>{isAdmin ? "Interest Sharing" : "My Interest"}</h2><p className="text-[10px] mt-1" style={{ color: "#7A7364" }}>Interest is shared in proportion to Table Banking contributions.</p></div>
+        <div><h2 className="text-sm font-semibold" style={{ color: TEAL_DARK }}>{isAdmin ? "Interest Sharing" : "My Interest"}</h2><p className="text-[10px] mt-1" style={{ color: "#7A7364" }}>Choose whether interest is shared by contributions, borrowing, or both.</p></div>
         {isAdmin && <button onClick={() => { setErr(""); setShowForm(true); }} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-medium" style={{ background: TEAL, color: CREAM }}><Plus size={14} /> Close round</button>}
       </div>
 
       {!isAdmin ? (
-        interestDistributions.filter((d) => d.member_id === session.member_id).length === 0
-          ? <EmptyState text="No interest has been shared with you yet." />
-          : [...interestRounds].sort((a,b) => String(b.end_date).localeCompare(String(a.end_date))).map((r) => {
-              const d = interestDistributions.find((x) => x.round_id === r.id && x.member_id === session.member_id);
-              if (!d) return null;
-              return <SectionCard key={r.id}>
-                <p className="text-sm font-semibold" style={{ color: TEAL_DARK }}>{r.name}</p>
-                <p className="text-[10px] mt-1" style={{ color: "#7A7364" }}>{fmtDate(r.start_date)} – {fmtDate(r.end_date)}</p>
-                <div className="grid grid-cols-3 gap-2 mt-3">
-                  <div><p className="text-[10px]" style={{ color: "#8A8270" }}>Contribution</p><p className="text-xs font-bold" style={{ color: TEAL_DARK }}>{fmtKES(d.contribution_total)}</p></div>
-                  <div><p className="text-[10px]" style={{ color: "#8A8270" }}>Share</p><p className="text-xs font-bold" style={{ color: GOLD }}>{Number(d.contribution_percentage || 0).toFixed(2)}%</p></div>
-                  <div><p className="text-[10px]" style={{ color: "#8A8270" }}>Interest</p><p className="text-xs font-bold" style={{ color: TEAL }}>{fmtKES(d.interest_share)}</p></div>
-                </div>
-              </SectionCard>;
-            })
+        interestDistributions.filter((d) => d.member_id === session.member_id).length === 0 ? <EmptyState text="No interest has been shared with you yet." /> :
+          [...interestRounds].sort((a,b) => String(b.end_date).localeCompare(String(a.end_date))).map((r) => {
+            const d = interestDistributions.find((x) => x.round_id === r.id && x.member_id === session.member_id); if (!d) return null;
+            return <SectionCard key={r.id}><p className="text-sm font-semibold" style={{ color: TEAL_DARK }}>{r.name}</p><p className="text-[10px] mt-1" style={{ color: "#7A7364" }}>{fmtDate(r.start_date)} – {fmtDate(r.end_date)}</p><p className="text-[10px] mt-2" style={{ color: "#7A7364" }}>{methodLabel(r)}</p><div className="grid grid-cols-3 gap-2 mt-3"><div><p className="text-[10px]" style={{ color: "#8A8270" }}>Contribution</p><p className="text-xs font-bold" style={{ color: TEAL_DARK }}>{fmtKES(d.contribution_total)}</p></div><div><p className="text-[10px]" style={{ color: "#8A8270" }}>Borrowing</p><p className="text-xs font-bold" style={{ color: TEAL_DARK }}>{fmtKES(d.borrowing_total)}</p></div><div><p className="text-[10px]" style={{ color: "#8A8270" }}>Interest</p><p className="text-xs font-bold" style={{ color: TEAL }}>{fmtKES(d.interest_share)}</p></div></div></SectionCard>;
+          })
       ) : (
-        <>
-          {interestRounds.length === 0 && <EmptyState text="No interest rounds closed yet." />}
-          {[...interestRounds].sort((a,b) => String(b.end_date).localeCompare(String(a.end_date))).map((r) => {
-            const rows = roundRows(r.id);
-            return <SectionCard key={r.id}>
-              <div className="flex items-start justify-between gap-2">
-                <div><p className="text-sm font-semibold" style={{ color: TEAL_DARK }}>{r.name}</p><p className="text-[10px] mt-1" style={{ color: "#7A7364" }}>{fmtDate(r.start_date)} – {fmtDate(r.end_date)}</p></div>
-                <button onClick={() => crud.removeInterestRound(r.id)} className="p-1.5 rounded-full" style={{ background: "#F6E4DE" }}><Trash2 size={13} color="#B3391F" /></button>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-3">
-                <div><p className="text-[10px]" style={{ color: "#8A8270" }}>Interest earned</p><p className="text-sm font-bold" style={{ color: GOLD }}>{fmtKES(r.total_interest)}</p></div>
-                <div><p className="text-[10px]" style={{ color: "#8A8270" }}>Distributed</p><p className="text-sm font-bold" style={{ color: TEAL }}>{fmtKES(r.distributable_interest)}</p></div>
-              </div>
-              {r.retained_amount > 0 && <p className="text-[10px] mt-2" style={{ color: "#7A7364" }}>Retained by chama: {fmtKES(r.retained_amount)}</p>}
-              <div className="mt-3 space-y-2">
-                {rows.map((d) => <div key={d.id} className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "#F8F3E7" }}>
-                  <div><p className="text-xs font-semibold" style={{ color: TEAL_DARK }}>{memberName(d.member_id)}</p><p className="text-[10px]" style={{ color: "#7A7364" }}>{Number(d.contribution_percentage || 0).toFixed(2)}% of contributions · {fmtKES(d.contribution_total)}</p></div>
-                  <p className="text-xs font-bold" style={{ color: GOLD }}>{fmtKES(d.interest_share)}</p>
-                </div>)}
-              </div>
-            </SectionCard>;
-          })}
-        </>
+        <>{interestRounds.length === 0 && <EmptyState text="No interest rounds closed yet." />}{[...interestRounds].sort((a,b) => String(b.end_date).localeCompare(String(a.end_date))).map((r) => { const rows = roundRows(r.id); return <SectionCard key={r.id}><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold" style={{ color: TEAL_DARK }}>{r.name}</p><p className="text-[10px] mt-1" style={{ color: "#7A7364" }}>{fmtDate(r.start_date)} – {fmtDate(r.end_date)}</p><p className="text-[10px] mt-1" style={{ color: "#7A7364" }}>{methodLabel(r)}</p></div><button onClick={() => crud.removeInterestRound(r.id)} className="p-1.5 rounded-full" style={{ background: "#F6E4DE" }}><Trash2 size={13} color="#B3391F" /></button></div><div className="grid grid-cols-2 gap-2 mt-3"><div><p className="text-[10px]" style={{ color: "#8A8270" }}>Interest earned</p><p className="text-sm font-bold" style={{ color: GOLD }}>{fmtKES(r.total_interest)}</p></div><div><p className="text-[10px]" style={{ color: "#8A8270" }}>Distributed</p><p className="text-sm font-bold" style={{ color: TEAL }}>{fmtKES(r.distributable_interest)}</p></div></div>{r.retained_amount > 0 && <p className="text-[10px] mt-2" style={{ color: "#7A7364" }}>Retained by chama: {fmtKES(r.retained_amount)}</p>}<div className="mt-3 space-y-2">{rows.map((d) => <div key={d.id} className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "#F8F3E7" }}><div><p className="text-xs font-semibold" style={{ color: TEAL_DARK }}>{memberName(d.member_id)}</p><p className="text-[10px]" style={{ color: "#7A7364" }}>Contribution {Number(d.contribution_percentage || 0).toFixed(2)}% · Borrowing {Number(d.borrowing_percentage || 0).toFixed(2)}%</p></div><p className="text-xs font-bold" style={{ color: GOLD }}>{fmtKES(d.interest_share)}</p></div>)}</div></SectionCard>; })}</>
       )}
 
-      {showForm && (
-        <Modal onClose={() => setShowForm(false)} title="Close interest round">
-          <Field label="Round name"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. 2026 Annual Interest" /></Field>
-          <Field label="Start date"><input type="date" className="input" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></Field>
-          <Field label="End date"><input type="date" className="input" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></Field>
-          <Field label="Total interest earned (Ksh)"><input type="number" min="0" step="0.01" className="input" value={form.total_interest} onChange={(e) => setForm({ ...form, total_interest: e.target.value })} /></Field>
-          <Field label="Amount to retain in chama (Ksh)"><input type="number" min="0" step="0.01" className="input" value={form.retained_amount} onChange={(e) => setForm({ ...form, retained_amount: e.target.value })} /></Field>
-
-          <SectionCard>
-            <p className="text-xs font-semibold" style={{ color: TEAL_DARK }}>Automatic calculation</p>
-            <p className="text-[10px] mt-1" style={{ color: "#7A7364" }}>Only Table Banking contributions between the selected dates are used.</p>
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              <div><p className="text-[10px]" style={{ color: "#8A8270" }}>Eligible contributions</p><p className="text-sm font-bold" style={{ color: TEAL_DARK }}>{fmtKES(preview.totalContrib)}</p></div>
-              <div><p className="text-[10px]" style={{ color: "#8A8270" }}>To distribute</p><p className="text-sm font-bold" style={{ color: GOLD }}>{fmtKES(preview.distributable)}</p></div>
-            </div>
-            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
-              {preview.rows.map((r) => <div key={r.member_id} className="flex justify-between text-xs"><span style={{ color: TEAL_DARK }}>{memberName(r.member_id)}</span><span style={{ color: GOLD }}>{Number(r.percentage).toFixed(2)}% · {fmtKES(r.interest_share)}</span></div>)}
-            </div>
-          </SectionCard>
-          {err && <p className="text-xs mb-2" style={{ color: "#B3391F" }}>{err}</p>}
-          <p className="text-[10px] mt-2" style={{ color: "#7A7364" }}>After saving, the shares are finalized as a snapshot for this round.</p>
-          <ModalActions onCancel={() => setShowForm(false)} onSave={save} />
-        </Modal>
-      )}
+      {showForm && <Modal onClose={() => setShowForm(false)} title="Close interest round">
+        <Field label="Round name"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. 2026 Annual Interest" /></Field>
+        <Field label="Start date"><input type="date" className="input" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></Field>
+        <Field label="End date"><input type="date" className="input" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></Field>
+        <Field label="Total interest earned (Ksh)"><input type="number" min="0" step="0.01" className="input" value={form.total_interest} onChange={(e) => setForm({ ...form, total_interest: e.target.value })} /></Field>
+        <Field label="Amount to retain in chama (Ksh)"><input type="number" min="0" step="0.01" className="input" value={form.retained_amount} onChange={(e) => setForm({ ...form, retained_amount: e.target.value })} /></Field>
+        <Field label="Interest sharing method"><select className="input" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}><option value="contributions">Contributions only</option><option value="borrowing">Borrowing only</option><option value="combined">Contributions + Borrowing</option></select></Field>
+        {form.method === "combined" && <div className="grid grid-cols-2 gap-2"><Field label="Contributions (%)"><input type="number" min="0" max="100" step="1" className="input" value={form.contribution_weight} onChange={(e) => setForm({ ...form, contribution_weight: e.target.value })} /></Field><Field label="Borrowing (%)"><input type="number" min="0" max="100" step="1" className="input" value={form.borrowing_weight} onChange={(e) => setForm({ ...form, borrowing_weight: e.target.value })} /></Field></div>}
+        <SectionCard><p className="text-xs font-semibold" style={{ color: TEAL_DARK }}>Automatic calculation</p><p className="text-[10px] mt-1" style={{ color: "#7A7364" }}>{form.method === "contributions" ? "Only Table Banking contributions are used." : form.method === "borrowing" ? "Borrowing is measured from loan principal outstanding during the selected period." : `The final share uses ${form.contribution_weight}% contributions and ${form.borrowing_weight}% borrowing.`}</p><div className="grid grid-cols-2 gap-2 mt-3"><div><p className="text-[10px]" style={{ color: "#8A8270" }}>Contributions</p><p className="text-sm font-bold" style={{ color: TEAL_DARK }}>{fmtKES(preview.totalContrib)}</p></div><div><p className="text-[10px]" style={{ color: "#8A8270" }}>Borrowing</p><p className="text-sm font-bold" style={{ color: TEAL_DARK }}>{fmtKES(preview.totalBorrowing)}</p></div></div><p className="text-[10px] mt-2" style={{ color: "#7A7364" }}>To distribute: <b>{fmtKES(preview.distributable)}</b></p><div className="mt-3 space-y-2 max-h-40 overflow-y-auto">{preview.rows.map((r) => <div key={r.member_id} className="flex justify-between text-xs"><span style={{ color: TEAL_DARK }}>{memberName(r.member_id)}</span><span style={{ color: GOLD }}>{Number(r.percentage).toFixed(2)}% · {fmtKES(r.interest_share)}</span></div>)}</div></SectionCard>
+        {err && <p className="text-xs mb-2" style={{ color: "#B3391F" }}>{err}</p>}<p className="text-[10px] mt-2" style={{ color: "#7A7364" }}>After saving, the shares are finalized as a snapshot for this round.</p><ModalActions onCancel={() => setShowForm(false)} onSave={save} />
+      </Modal>}
     </div>
   );
 }
@@ -1586,7 +1609,7 @@ function MemberHome({ session, members, contributions, events, announcements, lo
 
   return (
     <div>
-      {me && <SectionCard><p className="text-xs font-medium" style={{ color: "#8A8270" }}>Your profile</p><p className="text-sm font-semibold mt-1" style={{ color: TEAL_DARK }}>{me.name}</p><p className="text-xs mt-0.5" style={{ color: "#7A7364" }}>ID: {me.national_id} · {me.contact}</p></SectionCard>}
+      {me && <SectionCard><div className="flex items-center gap-3"><MemberAvatar member={me} size={64} /><div><p className="text-xs font-medium" style={{ color: "#8A8270" }}>Your profile</p><p className="text-sm font-semibold mt-1" style={{ color: TEAL_DARK }}>{me.name}</p><p className="text-xs mt-0.5" style={{ color: "#7A7364" }}>ID: {me.national_id} · {me.contact}</p></div></div></SectionCard>}
 
       {overdue.length > 0 && <SectionCard><div className="flex items-start gap-2"><AlertCircle size={18} color="#B3391F" className="mt-0.5" /><div><p className="text-sm font-semibold" style={{ color: "#B3391F" }}>Loan overdue</p>{overdue.map((l) => <p key={l.id} className="text-xs mt-1" style={{ color: TEAL_DARK }}>Your loan was due on {fmtDate(l.due_date)}. Kindly pay up to avoid penalties.</p>)}</div></div></SectionCard>}
       {dueSoon.length > 0 && <SectionCard><div className="flex items-start gap-2"><AlertCircle size={18} color={GOLD} className="mt-0.5" /><div><p className="text-sm font-semibold" style={{ color: TEAL_DARK }}>Loan due reminder</p>{dueSoon.map((l) => <p key={l.id} className="text-xs mt-1" style={{ color: TEAL_DARK }}>Your loan is due on {fmtDate(l.due_date)} kindly pay up to avoid penalties.</p>)}</div></div></SectionCard>}
