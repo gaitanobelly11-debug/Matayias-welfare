@@ -642,6 +642,7 @@ function MembersTab({ members, accounts, crud }) {
                 <button onClick={() => crud.removeMember(m.id)} className="p-1.5 rounded-full" style={{ background: "#F6E4DE" }}><Trash2 size={13} color="#B3391F" /></button>
               </div>
             </div>
+            </div>
             <div className="mt-3 flex gap-2">
               <button onClick={() => setAccForMember(m)} className="text-xs px-3 py-1.5 rounded-full font-medium" style={{ background: "#F1ECDD", color: TEAL_DARK }}>
                 {acc ? "Edit login account" : "Create login account"}
